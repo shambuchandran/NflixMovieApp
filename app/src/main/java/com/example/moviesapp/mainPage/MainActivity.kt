@@ -19,6 +19,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.moviesapp.movieList.details.DetailsScreen
 import com.example.moviesapp.movieList.presentation.MovieListViewModel
 import com.example.moviesapp.movieList.util.Screen
 import com.example.moviesapp.ui.theme.MoviesAppTheme
@@ -38,17 +39,16 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    val navController= rememberNavController()
-                    NavHost(navController = navController, startDestination = Screen.Home.rout ){
-                        composable(Screen.Home.rout){
+                    val navController = rememberNavController()
+                    NavHost(navController = navController, startDestination = Screen.Home.rout) {
+                        composable(Screen.Home.rout) {
                             HomeScreen(navController)
-
                         }
-                        composable(Screen.Details.rout + "/{movieId}",
-                            arguments = listOf(navArgument("movieId"){type= NavType.IntType})
-                            ){backStackEntry ->
-                            //DetailsScreen(backStackEntry)
-
+                        composable(
+                            Screen.Details.rout + "/{movieId}",
+                            arguments = listOf(navArgument("movieId") { type = NavType.IntType })
+                        ) {
+                            DetailsScreen()
                         }
                     }
                 }
@@ -57,12 +57,12 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun SetBarColor(color:Color) {
-        val systemUiController= rememberSystemUiController()
-        LaunchedEffect(key1 =color) {
+    fun SetBarColor(color: Color) {
+        val systemUiController = rememberSystemUiController()
+        LaunchedEffect(key1 = color) {
             systemUiController.setSystemBarsColor(color)
         }
-        
+
     }
 }
 
