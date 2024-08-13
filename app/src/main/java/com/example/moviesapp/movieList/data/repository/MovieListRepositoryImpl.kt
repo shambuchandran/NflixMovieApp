@@ -1,9 +1,11 @@
 package com.example.moviesapp.movieList.data.repository
 
+import android.util.Log
 import com.example.moviesapp.movieList.data.mappers.toMovie
 import com.example.moviesapp.movieList.data.mappers.toMovieEntity
 import com.example.moviesapp.movieList.data.remote.MovieApi
 import com.example.moviesapp.movieList.data.remote.response.MovieDataBase
+import com.example.moviesapp.movieList.data.remote.response.MovieDto
 import com.example.moviesapp.movieList.domain.model.Movie
 import com.example.moviesapp.movieList.domain.repository.MovieListRepository
 import com.example.moviesapp.movieList.util.Resource
@@ -11,12 +13,14 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import retrofit2.HttpException
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 class MovieListRepositoryImpl @Inject constructor(
     private val movieApi: MovieApi,
     private val movieDatabase: MovieDataBase
 ) : MovieListRepository {
+    private val cacheDurationMinutes= 30
     override suspend fun getMovieList(
         forceFetchFromRemote: Boolean,
         category: String,
@@ -25,7 +29,11 @@ class MovieListRepositoryImpl @Inject constructor(
         return flow {
             emit(Resource.Loading(true))
             val localMovieList = movieDatabase.movieDao.getMovieListByCategory(category)
-            val shouldLoadLocalMovie = localMovieList.isNotEmpty() && !forceFetchFromRemote
+            var lastFetched= movieDatabase.movieDao.getLastFetchedTime(category)
+            val isCachedValid=lastFetched != null && System.currentTimeMillis() - lastFetched < TimeUnit.MINUTES.toMillis(
+                cacheDurationMinutes.toLong()
+            )
+            val shouldLoadLocalMovie = localMovieList.isNotEmpty() && isCachedValid && !forceFetchFromRemote
             if (shouldLoadLocalMovie) {
                 emit(Resource.Success(data = localMovieList.map { movieEntity ->
                     movieEntity.toMovie(category)
@@ -38,20 +46,28 @@ class MovieListRepositoryImpl @Inject constructor(
                 movieApi.getMoviesList(category, page)
             } catch (e: IOException) {
                 e.printStackTrace()
+                Log.e("MovieRepository", "Network error loading movies")
                 emit(Resource.Error(message = "Error loading movies"))
                 return@flow
             } catch (e: HttpException) {
                 e.printStackTrace()
+                Log.e("MovieRepository", "HTTP error loading movies")
                 emit(Resource.Error(message = "Error loading movies"))
                 return@flow
             } catch (e: Exception) {
                 e.printStackTrace()
+                Log.e("MovieRepository", "General error loading movies")
                 emit(Resource.Error(message = "Error loading movies"))
                 return@flow
             }
-            val movieEntity = movieListFromApi.results.let {
-                it.map { movieDto ->
-                    movieDto.toMovieEntity(category)
+//            val movieEntity = movieListFromApi.results.let {
+//                it.map { movieDto ->
+//                    movieDto.toMovieEntity(category)
+//                }
+//            }
+            val movieEntity = movieListFromApi.results.map {
+                it.toMovieEntity(category).apply {
+                    lastFetched=System.currentTimeMillis()
                 }
             }
             movieDatabase.movieDao.upsertMovieList(movieEntity)

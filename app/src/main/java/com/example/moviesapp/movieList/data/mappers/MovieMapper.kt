@@ -24,6 +24,7 @@ fun MovieDto.toMovieEntity(
         video = video ?: false,
 
         category = category,
+        lastFetched = System.currentTimeMillis(),
 
         genre_ids = try {
             genre_ids?.joinToString(",") ?: "-1,-2"
@@ -52,6 +53,7 @@ fun MovieEntity.toMovie(
         original_title = original_title,
 
         category = category,
+
 
         genre_ids = try {
             genre_ids.split(",").map { it.toInt() }

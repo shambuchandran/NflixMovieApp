@@ -14,4 +14,6 @@ interface MovieDao {
 
     @Query("SELECT * FROM MovieEntity WHERE category= :category")
     suspend fun getMovieListByCategory(category: String):List<MovieEntity>
+    @Query("SELECT lastFetched FROM MovieEntity WHERE category = :category LIMIT 2")
+    suspend fun getLastFetchedTime(category: String):Long?
 }
