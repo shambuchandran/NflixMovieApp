@@ -1,7 +1,16 @@
 package com.example.moviesapp.movieList.details
 
+import android.app.Activity
+import android.content.Context
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.os.Environment
+import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,11 +26,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ImageNotSupported
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,6 +48,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
@@ -38,11 +57,25 @@ import coil.request.ImageRequest
 import coil.size.Size
 import com.example.moviesapp.movieList.data.remote.MovieApi
 import com.example.moviesapp.movieList.util.RatingBar
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.io.File
+import java.io.FileOutputStream
+import java.io.InputStream
 
 @Composable
 fun DetailsScreen() {
     val detailsViewModel = hiltViewModel<DetailsViewModel>()
     val detailsState = detailsViewModel.detailsState.collectAsState().value
+    var isDownloading by remember { mutableStateOf(false) }
+    val progress by remember { mutableStateOf(0f) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+
     val backDropImage = rememberAsyncImagePainter(
         model = ImageRequest.Builder(LocalContext.current)
             .data(MovieApi.IMAGE_BASE_URL + detailsState.movie?.backdrop_path)
@@ -55,6 +88,50 @@ fun DetailsScreen() {
             .size(Size.ORIGINAL)
             .build()
     ).state
+
+    suspend fun downloadImageWithProgress(url: String, context: Context): Boolean {
+        if (ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                context as Activity,
+                arrayOf(android.Manifest.permission.WRITE_EXTERNAL_STORAGE),
+                1
+            )
+            return false
+        }
+
+        return withContext(Dispatchers.IO) {
+            try {
+                val client = OkHttpClient()
+                val request = Request.Builder().url(url).build()
+                val response = client.newCall(request).execute()
+                if (!response.isSuccessful) return@withContext false
+
+                val inputStream: InputStream? = response.body?.byteStream()
+                val bitmap = BitmapFactory.decodeStream(inputStream)
+                val directory = File(
+                    context.getExternalFilesDir(Environment.DIRECTORY_PICTURES),
+                    "MoviesApp"
+                )
+                if (!directory.exists()) {
+                    directory.mkdirs()
+                }
+                val file = File(directory, "movie_poster.jpg")
+                val fos = FileOutputStream(file)
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 100, fos)
+                fos.flush()
+                fos.close()
+                true
+            } catch (e: Exception) {
+                e.printStackTrace()
+                false
+            }
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -117,13 +194,40 @@ fun DetailsScreen() {
                         modifier = Modifier
                             .fillMaxSize()
                             .clip(RoundedCornerShape(12.dp))
-                            .height(220.dp),
+                            .height(220.dp)
+                            .clickable {
+                                isDownloading = true
+                                scope.launch {
+                                    val success = downloadImageWithProgress(
+                                        MovieApi.IMAGE_BASE_URL + detailsState.movie?.poster_path,
+                                        context
+                                    )
+                                    isDownloading = false
+                                    if (success) {
+                                        Toast.makeText(context, "Download successful!", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(context, "Download failed. Please try again.", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
                         painter = posterImageState.painter,
                         contentDescription = detailsState.movie?.title,
                         contentScale = ContentScale.Crop
+
                     )
                 }
+                if (isDownloading) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            progress = { progress },
+                        )
+                    }
+                }
             }
+
             detailsState.movie?.let { movie ->
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(

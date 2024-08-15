@@ -32,6 +32,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navDeepLink
 import com.example.moviesapp.R
 import com.example.moviesapp.movieList.presentation.MovieListUiEvents
 import com.example.moviesapp.movieList.presentation.MovieListViewModel
@@ -76,14 +77,14 @@ fun HomeScreen(navController: NavHostController) {
                 navController = bottomNavController,
                 startDestination = Screen.PopularMovieList.rout
             ) {
-                composable(Screen.PopularMovieList.rout) {
+                composable(Screen.PopularMovieList.rout, deepLinks = listOf(navDeepLink { uriPattern = "myapp://popular" })) {
                     PopularMoviesScreen(
                         navController = navController,
                         movieListState = movieListState,
                         onEvent = movieListViewModel::onEvent
                     )
                 }
-                composable(Screen.UpcomingMovieList.rout) {
+                composable(Screen.UpcomingMovieList.rout, deepLinks = listOf(navDeepLink { uriPattern ="myapp://upcoming" })) {
                     UpcomingMoviesScreen(
                         navController = navController,
                         movieListState = movieListState,
