@@ -29,52 +29,58 @@ class MovieListRepositoryImpl @Inject constructor(
         return flow {
             emit(Resource.Loading(true))
             val localMovieList = movieDatabase.movieDao.getMovieListByCategory(category)
-            var lastFetched= movieDatabase.movieDao.getLastFetchedTime(category)
-            val isCachedValid=lastFetched != null && System.currentTimeMillis() - lastFetched < TimeUnit.MINUTES.toMillis(
-                cacheDurationMinutes.toLong()
-            )
-            val shouldLoadLocalMovie = localMovieList.isNotEmpty() && isCachedValid && !forceFetchFromRemote
-            if (shouldLoadLocalMovie) {
-                emit(Resource.Success(data = localMovieList.map { movieEntity ->
-                    movieEntity.toMovie(category)
+            var lastFetched = movieDatabase.movieDao.getLastFetchedTime(category)
+            val isCachedValid =
+                lastFetched != null && System.currentTimeMillis() - lastFetched < TimeUnit.MINUTES.toMillis(
+                    cacheDurationMinutes.toLong()
+                )
+            if (localMovieList.isNotEmpty()) {
+                emit(Resource.Success(data = localMovieList.map { it.toMovie(category) }))
+            }
+//            val shouldLoadLocalMovie = localMovieList.isNotEmpty() && isCachedValid && !forceFetchFromRemote
+//            if (shouldLoadLocalMovie) {
+//                emit(Resource.Success(data = localMovieList.map { movieEntity ->
+//                    movieEntity.toMovie(category)
+//                }
+//                ))
+//                emit(Resource.Loading(false))
+//                return@flow
+//            }
+            if (!isCachedValid || forceFetchFromRemote) {
+                val movieListFromApi = try {
+                    movieApi.getMoviesList(category, page)
+                } catch (e: IOException) {
+                    e.printStackTrace()
+                    Log.e("MovieRepository", "Network error loading movies")
+                    emit(Resource.Error(message = "Error loading movies"))
+                    return@flow
+                } catch (e: HttpException) {
+                    e.printStackTrace()
+                    Log.e("MovieRepository", "HTTP error loading movies")
+                    emit(Resource.Error(message = "Error loading movies"))
+                    return@flow
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    Log.e("MovieRepository", "General error loading movies")
+                    emit(Resource.Error(message = "Error loading movies"))
+                    return@flow
                 }
-                ))
-                emit(Resource.Loading(false))
-                return@flow
-            }
-            val movieListFromApi = try {
-                movieApi.getMoviesList(category, page)
-            } catch (e: IOException) {
-                e.printStackTrace()
-                Log.e("MovieRepository", "Network error loading movies")
-                emit(Resource.Error(message = "Error loading movies"))
-                return@flow
-            } catch (e: HttpException) {
-                e.printStackTrace()
-                Log.e("MovieRepository", "HTTP error loading movies")
-                emit(Resource.Error(message = "Error loading movies"))
-                return@flow
-            } catch (e: Exception) {
-                e.printStackTrace()
-                Log.e("MovieRepository", "General error loading movies")
-                emit(Resource.Error(message = "Error loading movies"))
-                return@flow
-            }
 //            val movieEntity = movieListFromApi.results.let {
 //                it.map { movieDto ->
 //                    movieDto.toMovieEntity(category)
 //                }
 //            }
-            val movieEntity = movieListFromApi.results.map {
-                it.toMovieEntity(category).apply {
-                    lastFetched=System.currentTimeMillis()
+                val movieEntity = movieListFromApi.results.map {
+                    it.toMovieEntity(category).apply {
+                        lastFetched = System.currentTimeMillis()
+                    }
                 }
+                movieDatabase.movieDao.upsertMovieList(movieEntity)
+                emit(Resource.Success(movieEntity.map {
+                    it.toMovie(category)
+                }))
+                emit(Resource.Loading(false))
             }
-            movieDatabase.movieDao.upsertMovieList(movieEntity)
-            emit(Resource.Success(movieEntity.map {
-                it.toMovie(category)
-            }))
-            emit(Resource.Loading(false))
         }
 
     }
@@ -87,8 +93,7 @@ class MovieListRepositoryImpl @Inject constructor(
                 emit(Resource.Success(movieEntity.toMovie(movieEntity.category)))
                 emit(Resource.Loading(false))
                 return@flow
-            }
-            emit(Resource.Error("Error no such movie"))
+            }else {emit(Resource.Error("Error no such movie"))}
             emit(Resource.Loading(false))
         }
     }

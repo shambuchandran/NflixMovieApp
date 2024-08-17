@@ -58,11 +58,11 @@ fun HomeScreen(navController: NavHostController) {
             TopAppBar(
                 title = {
                     Text(
-                        text = if (movieListState.isCurrentPopularScreen) stringResource(R.string.popular_movies)
-                        else stringResource(R.string.upcoming_movies), fontSize = 20.sp
+                        text = if (movieListState.isCurrentPopularScreen) {
+                            stringResource(R.string.popular_movies)
+                        } else {stringResource(R.string.upcoming_movies)}
+                        , fontSize = 20.sp
                     )
-
-
                 }, modifier = Modifier.shadow(2.dp),
                 colors = TopAppBarDefaults.smallTopAppBarColors(MaterialTheme.colorScheme.inverseOnSurface)
             )
